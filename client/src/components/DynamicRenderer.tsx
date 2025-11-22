@@ -23,7 +23,7 @@ const DynamicRenderer: React.FC<DynamicRendererProps> = ({ code }) => {
             <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
             <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
             <style>
-              body { margin: 0; padding: 0; overflow: auto; }
+              body { margin: 0; padding: 0; overflow: auto; padding-bottom: 160px; }
               #root { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
             </style>
           </head>

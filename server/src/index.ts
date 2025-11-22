@@ -48,7 +48,8 @@ app.post('/api/generate-jsx', async (req, res) => {
       2. NO markdown formatting.
       3. NO imports (React is available globally).
       4. Name the component 'GeneratedComponent'.
-      5. Export default 'GeneratedComponent'.
+      5. Export default 'GeneratedComponent' at the end (e.g. "export default GeneratedComponent;").
+      6. DO NOT use "export default function" or "export default () =>". Define the component first, then export it.
     `;
 
     const result = await model.generateContent([systemPrompt, prompt]);
@@ -61,8 +62,17 @@ app.post('/api/generate-jsx', async (req, res) => {
     // Remove imports
     cleanText = cleanText.replace(/^import\s+.*\n?/gm, '');
 
-    // Remove export default
-    cleanText = cleanText.replace(/^export\s+default\s+.*;?\n?/gm, '');
+    // Handle "export default function" -> "function" (just in case)
+    cleanText = cleanText.replace(/export\s+default\s+function/g, 'function');
+
+    // Handle "export default class" -> "class" (just in case)
+    cleanText = cleanText.replace(/export\s+default\s+class/g, 'class');
+
+    // Remove "export default GeneratedComponent;"
+    cleanText = cleanText.replace(/^export\s+default\s+GeneratedComponent;?\s*$/gm, '');
+
+    // Remove any remaining "export default" to prevent syntax errors
+    cleanText = cleanText.replace(/export\s+default\s+/g, '');
 
     res.json({ code: cleanText });
   } catch (error) {
