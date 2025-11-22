@@ -1,11 +1,26 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+
+export interface DynamicRendererHandle {
+  scrollToBottom: () => void;
+}
 
 interface DynamicRendererProps {
   code: string;
 }
 
-const DynamicRenderer: React.FC<DynamicRendererProps> = ({ code }) => {
+const DynamicRenderer = forwardRef<DynamicRendererHandle, DynamicRendererProps>(({ code }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    scrollToBottom: () => {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.scrollTo({
+          top: iframeRef.current.contentDocument?.body.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }
+  }));
 
   useEffect(() => {
     if (iframeRef.current) {
@@ -63,6 +78,6 @@ const DynamicRenderer: React.FC<DynamicRendererProps> = ({ code }) => {
       style={{ minHeight: '100%' }}
     />
   );
-};
+});
 
 export default DynamicRenderer;
