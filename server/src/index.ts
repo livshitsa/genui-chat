@@ -50,12 +50,12 @@ app.post('/api/generate-jsx', async (req, res) => {
       1. LINKS & BUTTONS: If you generate links (<a> tags) or buttons that imply navigation:
          - They MUST be functional.
          - External links MUST use \`target="_blank"\` and \`rel="noopener noreferrer"\` to open in a new tab.
-         - Do NOT generate dead buttons that do nothing unless they are purely decorative toggles within the component.
+         - Do NOT generate dead buttons that do nothing.
          - If a link is to a generic place, use a real, valid URL (e.g., a Google search link or a Wikipedia link) if possible, or a placeholder that clearly looks like a placeholder but is still clickable.
       
       Design Requirements:
       1. Use Tailwind CSS for sophisticated styling.
-      2. AVOID GENERIC "AI PURPLE" THEMES. Do not use purple-500, violet-600, etc., as primary colors unless specifically requested.
+      2. AVOID GENERIC "AI PURPLE" THEMES. Do not use purple-500, violet-600, etc., as primary colors unless specifically requested. 
       3. Make it PREMIUM and MODERN:
          - Use sophisticated color palettes: Slate, Zinc, Neutral, or vibrant accents like Emerald, Amber, Rose, Indigo (sparingly).
          - Use gradients (bg-gradient-to-br from-slate-900 to-slate-800).
@@ -85,10 +85,34 @@ app.post('/api/generate-jsx', async (req, res) => {
     const dbMessages = await ConversationService.getConversationHistory(sessionId);
 
     // Convert database messages to LLM format
-    const conversationMessages: ConversationMessage[] = dbMessages.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
+    // Strategy: "Active Component"
+    // - Keep full code for the MOST RECENT AI message (to allow iteration)
+    // - Replace code in older AI messages with a placeholder (to save tokens)
+
+    // Find the index of the last AI message
+    const lastAiIndex = dbMessages.map(m => m.role).lastIndexOf('ai');
+
+    const conversationMessages: ConversationMessage[] = dbMessages.map((msg, index) => {
+      // Check if this is the last AI message in the history
+      const isLastAiMessage = index === lastAiIndex;
+
+      let content = msg.content;
+
+      if (msg.role === 'ai' && msg.component_code) {
+        if (isLastAiMessage) {
+          // Keep full code for the latest component so we can iterate on it
+          content = msg.component_code;
+        } else {
+          // Summarize older components to save tokens
+          content = `[Previous Component Code Hidden] (Description: ${msg.content})`;
+        }
+      }
+
+      return {
+        role: msg.role,
+        content: content
+      };
+    });
 
     console.log(`📝 Processing conversation ${sessionId} with ${conversationMessages.length} messages`);
 
