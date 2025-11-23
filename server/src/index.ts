@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 
 dotenv.config({ path: '../.env' });
 
@@ -11,12 +12,18 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+const geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+// Initialize Anthropic
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || '', // Defaults to process.env.ANTHROPIC_API_KEY
+});
 
 app.post('/api/generate-jsx', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, model = 'gemini' } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
@@ -62,9 +69,30 @@ app.post('/api/generate-jsx', async (req, res) => {
       6. DO NOT use "export default function" or "export default () =>". Define the component first, then export it.
     `;
 
-    const result = await model.generateContent([systemPrompt, prompt]);
-    const response = await result.response;
-    const text = response.text();
+    let text = '';
+
+    if (model === 'anthropic') {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error('ANTHROPIC_API_KEY is not set');
+      }
+      const message = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001', // As requested
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [
+          { role: "user", content: prompt }
+        ]
+      });
+
+      if (message.content[0].type === 'text') {
+        text = message.content[0].text;
+      }
+    } else {
+      // Default to Gemini
+      const result = await geminiModel.generateContent([systemPrompt, prompt]);
+      const response = await result.response;
+      text = response.text();
+    }
 
     // Clean up the response
     let cleanText = text.replace(/```jsx/g, '').replace(/```/g, '').trim();
@@ -97,5 +125,6 @@ app.post('/api/generate-jsx', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
-  console.log('API Key present:', !!process.env.GEMINI_API_KEY);
+  console.log('Gemini API Key present:', !!process.env.GEMINI_API_KEY);
+  console.log('Anthropic API Key present:', !!process.env.ANTHROPIC_API_KEY);
 });

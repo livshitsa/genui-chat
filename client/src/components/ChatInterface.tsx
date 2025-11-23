@@ -15,6 +15,7 @@ const ChatInterface: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [activeComponentCode, setActiveComponentCode] = useState<string | null>(null);
     const [isChatExpanded, setIsChatExpanded] = useState(true);
+    const [selectedModel, setSelectedModel] = useState<'gemini' | 'anthropic'>('gemini');
     const rendererRef = useRef<DynamicRendererHandle>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +37,7 @@ const ChatInterface: React.FC = () => {
             const response = await fetch('http://localhost:3000/api/generate-jsx', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: input }),
+                body: JSON.stringify({ prompt: input, model: selectedModel }),
             });
 
             const data = await response.json();
@@ -100,7 +101,9 @@ const ChatInterface: React.FC = () => {
                                 </div>
                             </div>
                             <div>
-                                <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 mb-3 tracking-tight">Gemini Assistant</h2>
+                                <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 mb-3 tracking-tight">
+                                    {selectedModel === 'gemini' ? 'Gemini' : 'Claude'} Assistant
+                                </h2>
                                 <p className="text-lg text-slate-500 leading-relaxed">
                                     Ask a question or describe a UI to generate <span className="text-blue-400 font-medium">interactive components</span> instantly.
                                 </p>
@@ -193,12 +196,22 @@ const ChatInterface: React.FC = () => {
                         onSubmit={handleSubmit}
                         className="relative bg-slate-900/60 backdrop-blur-2xl border border-slate-800/60 shadow-2xl rounded-[2rem] p-2 flex gap-2 ring-1 ring-white/5 transition-all duration-300 focus-within:ring-blue-500/50 focus-within:bg-slate-900/80 focus-within:border-slate-700 focus-within:shadow-blue-900/20 hover:border-slate-700"
                     >
+                        <div className="flex items-center pl-4">
+                            <select
+                                value={selectedModel}
+                                onChange={(e) => setSelectedModel(e.target.value as 'gemini' | 'anthropic')}
+                                className="bg-slate-800/50 text-slate-300 text-sm rounded-lg border border-slate-700 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none cursor-pointer hover:bg-slate-800 transition-colors"
+                            >
+                                <option value="gemini">Gemini</option>
+                                <option value="anthropic">Claude</option>
+                            </select>
+                        </div>
                         <input
                             type="text"
                             value={input}
                             onChange={e => setInput(e.target.value)}
-                            placeholder="Ask a question or describe a UI..."
-                            className="flex-1 bg-transparent border-none px-6 py-4 focus:outline-none text-slate-100 placeholder-slate-500 text-lg font-light"
+                            placeholder={`Ask ${selectedModel === 'gemini' ? 'Gemini' : 'Claude'} a question...`}
+                            className="flex-1 bg-transparent border-none px-4 py-4 focus:outline-none text-slate-100 placeholder-slate-500 text-lg font-light"
                         />
                         <button
                             type="submit"
