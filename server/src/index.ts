@@ -64,18 +64,34 @@ app.post('/api/generate-jsx', async (req, res) => {
       7. Ensure all tags are properly closed and JSX is valid.
     `;
 
-    const provider = LLMFactory.getProvider(model);
-    const response = await provider.generate(systemPrompt, prompt);
-    const cleanText = cleanJSX(response.text);
+    // Set headers for streaming
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
 
-    res.json({ code: cleanText });
+    const provider = LLMFactory.getProvider(model);
+
+    try {
+      const stream = provider.generateStream(systemPrompt, prompt);
+
+      for await (const chunk of stream) {
+        res.write(chunk);
+      }
+
+      res.end();
+    } catch (streamError) {
+      console.error('Streaming error:', streamError);
+      // If we haven't sent headers yet (unlikely given the code above, but good practice), we could send JSON error.
+      // But since we started streaming, we might just end the stream.
+      // In a real app we might send a specific error chunk.
+      res.end();
+    }
   } catch (error) {
     console.error('Error generating JSX:', error);
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate JSX', details: error instanceof Error ? error.message : String(error) });
+    } else {
+      res.end();
     }
-    res.status(500).json({ error: 'Failed to generate JSX', details: error instanceof Error ? error.message : String(error) });
   }
 });
 

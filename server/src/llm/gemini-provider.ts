@@ -20,4 +20,19 @@ export class GeminiProvider implements LLMProvider {
             throw error;
         }
     }
+
+    async *generateStream(systemPrompt: string, userPrompt: string): AsyncGenerator<string, void, unknown> {
+        try {
+            const result = await this.model.generateContentStream([systemPrompt, userPrompt]);
+            for await (const chunk of result.stream) {
+                const chunkText = chunk.text();
+                if (chunkText) {
+                    yield chunkText;
+                }
+            }
+        } catch (error) {
+            console.error('Gemini streaming error:', error);
+            throw error;
+        }
+    }
 }

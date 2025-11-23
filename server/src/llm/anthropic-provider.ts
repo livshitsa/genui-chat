@@ -31,4 +31,26 @@ export class AnthropicProvider implements LLMProvider {
             throw error;
         }
     }
+
+    async *generateStream(systemPrompt: string, userPrompt: string): AsyncGenerator<string, void, unknown> {
+        try {
+            const stream = this.anthropic.messages.stream({
+                model: this.modelName,
+                max_tokens: 4096,
+                system: systemPrompt,
+                messages: [
+                    { role: "user", content: userPrompt }
+                ]
+            });
+
+            for await (const chunk of stream) {
+                if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+                    yield chunk.delta.text;
+                }
+            }
+        } catch (error) {
+            console.error('Anthropic streaming error:', error);
+            throw error;
+        }
+    }
 }
