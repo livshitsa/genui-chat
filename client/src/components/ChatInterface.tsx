@@ -20,11 +20,27 @@ const ChatInterface: React.FC = () => {
     const rendererRef = useRef<DynamicRendererHandle>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
+    const abortControllerRef = useRef<AbortController | null>(null);
+
     useEffect(() => {
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
     }, [messages, isLoading]);
+
+    const handleCancel = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+            setIsLoading(false);
+            setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                role: 'ai',
+                content: 'Request canceled by user.',
+                model: selectedModel
+            }]);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,14 +55,30 @@ const ChatInterface: React.FC = () => {
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
-        setIsChatExpanded(true); // Expand chat to show user message and loading state
+        setIsChatExpanded(true);
+
+        // Create new AbortController
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        // Set timeout
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+        }, 45000); // 45 seconds timeout
 
         try {
             const response = await fetch('http://localhost:3000/api/generate-jsx', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: input, model: selectedModel }),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
 
             const data = await response.json();
 
@@ -60,14 +92,33 @@ const ChatInterface: React.FC = () => {
                 };
                 setMessages(prev => [...prev, aiMessage]);
                 setActiveComponentCode(data.code);
-                setIsChatExpanded(false); // Collapse chat after generation to show component
+                setIsChatExpanded(false);
             } else {
-                console.error('No code returned');
+                throw new Error('No code returned from server');
             }
         } catch (error) {
-            console.error('Error:', error);
+            if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                    setMessages(prev => [...prev, {
+                        id: Date.now().toString(),
+                        role: 'ai',
+                        content: 'Request timed out after 45 seconds.',
+                        model: selectedModel
+                    }]);
+                } else {
+                    console.error('Error:', error);
+                    setMessages(prev => [...prev, {
+                        id: Date.now().toString(),
+                        role: 'ai',
+                        content: `Error: ${error.message}. Please try again.`,
+                        model: selectedModel
+                    }]);
+                }
+            }
         } finally {
             setIsLoading(false);
+            abortControllerRef.current = null;
+            clearTimeout(timeoutId);
         }
     };
 
@@ -161,10 +212,10 @@ const ChatInterface: React.FC = () => {
                                                 }}
                                                 disabled={activeComponentCode === msg.componentCode || isLoading}
                                                 className={`flex items-center gap-2 text-xs font-medium uppercase tracking-wider mt-2 transition-all duration-300 px-3 py-1.5 rounded-lg border ${activeComponentCode === msg.componentCode
-                                                        ? 'bg-green-500/10 text-green-400 border-green-500/20 cursor-default'
-                                                        : isLoading
-                                                            ? 'bg-slate-800/50 text-slate-500 border-slate-700 cursor-not-allowed opacity-50'
-                                                            : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 cursor-pointer'
+                                                    ? 'bg-green-500/10 text-green-400 border-green-500/20 cursor-default'
+                                                    : isLoading
+                                                        ? 'bg-slate-800/50 text-slate-500 border-slate-700 cursor-not-allowed opacity-50'
+                                                        : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 cursor-pointer'
                                                     }`}
                                             >
                                                 {activeComponentCode === msg.componentCode ? (
@@ -194,12 +245,18 @@ const ChatInterface: React.FC = () => {
                         ))}
                         {isLoading && (
                             <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                <div className="bg-slate-900/80 backdrop-blur-md rounded-3xl px-6 py-4 shadow-xl border border-slate-800">
+                                <div className="bg-slate-900/80 backdrop-blur-md rounded-3xl px-6 py-4 shadow-xl border border-slate-800 flex items-center gap-4">
                                     <div className="flex gap-1.5">
                                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                         <div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                         <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                                     </div>
+                                    <button
+                                        onClick={handleCancel}
+                                        className="text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2 py-1 rounded transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
                                 </div>
                             </div>
                         )}

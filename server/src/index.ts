@@ -50,15 +50,18 @@ app.post('/api/generate-jsx', async (req, res) => {
       
       Design Requirements:
       1. Use Tailwind CSS for sophisticated styling.
-      2. Make it BEAUTIFUL and MODERN:
-         - Use gradients (bg-gradient-to-r ...).
-         - Use shadows (shadow-lg, shadow-xl).
-         - Use rounded corners (rounded-xl, rounded-2xl).
-         - Add interactivity (hover:scale-105, hover:shadow-2xl, transition-all duration-300).
-         - Use glassmorphism where appropriate (backdrop-blur-md, bg-white/30).
-      3. Use inline SVGs for icons. Do NOT use external icon libraries.
-      4. The component must be responsive (w-full, max-w-...).
-      5. The content (the answer to the user) must be high-quality, helpful, and easy to read within the UI.
+      2. AVOID GENERIC "AI PURPLE" THEMES. Do not use purple-500, violet-600, etc., as primary colors unless specifically requested.
+      3. Make it PREMIUM and MODERN:
+         - Use sophisticated color palettes: Slate, Zinc, Neutral, or vibrant accents like Emerald, Amber, Rose, Indigo (sparingly).
+         - Use gradients (bg-gradient-to-br from-slate-900 to-slate-800).
+         - Use subtle borders (border border-white/10).
+         - Use shadows (shadow-xl, shadow-2xl).
+         - Use rounded corners (rounded-2xl, rounded-3xl).
+         - Add interactivity (hover:scale-[1.02], active:scale-95, transition-all duration-300).
+         - Use glassmorphism where appropriate (backdrop-blur-xl, bg-white/5 or bg-black/20).
+      4. Use inline SVGs for icons. Do NOT use external icon libraries.
+      5. The component must be responsive (w-full, max-w-...).
+      6. The content (the answer to the user) must be high-quality, helpful, and easy to read within the UI.
       
       Technical Rules:
       1. Return ONLY the raw JSX code.
@@ -67,6 +70,7 @@ app.post('/api/generate-jsx', async (req, res) => {
       4. Name the component 'GeneratedComponent'.
       5. Export default 'GeneratedComponent' at the end (e.g. "export default GeneratedComponent;").
       6. DO NOT use "export default function" or "export default () =>". Define the component first, then export it.
+      7. Ensure all tags are properly closed and JSX is valid.
     `;
 
     let text = '';
