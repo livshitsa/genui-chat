@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import Anthropic from '@anthropic-ai/sdk';
+import { LLMFactory } from './llm/llm-factory';
+import { cleanJSX } from './utils/text-cleaner';
 
 dotenv.config({ path: '../.env' });
 
@@ -11,15 +11,6 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-// Initialize Anthropic
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '', // Defaults to process.env.ANTHROPIC_API_KEY
-});
 
 app.post('/api/generate-jsx', async (req, res) => {
   try {
@@ -73,48 +64,9 @@ app.post('/api/generate-jsx', async (req, res) => {
       7. Ensure all tags are properly closed and JSX is valid.
     `;
 
-    let text = '';
-
-    if (model === 'anthropic') {
-      if (!process.env.ANTHROPIC_API_KEY) {
-        throw new Error('ANTHROPIC_API_KEY is not set');
-      }
-      const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001', // As requested
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [
-          { role: "user", content: prompt }
-        ]
-      });
-
-      if (message.content[0].type === 'text') {
-        text = message.content[0].text;
-      }
-    } else {
-      // Default to Gemini
-      const result = await geminiModel.generateContent([systemPrompt, prompt]);
-      const response = await result.response;
-      text = response.text();
-    }
-
-    // Clean up the response
-    let cleanText = text.replace(/```jsx/g, '').replace(/```/g, '').trim();
-
-    // Remove imports
-    cleanText = cleanText.replace(/^import\s+.*\n?/gm, '');
-
-    // Handle "export default function" -> "function" (just in case)
-    cleanText = cleanText.replace(/export\s+default\s+function/g, 'function');
-
-    // Handle "export default class" -> "class" (just in case)
-    cleanText = cleanText.replace(/export\s+default\s+class/g, 'class');
-
-    // Remove "export default GeneratedComponent;"
-    cleanText = cleanText.replace(/^export\s+default\s+GeneratedComponent;?\s*$/gm, '');
-
-    // Remove any remaining "export default" to prevent syntax errors
-    cleanText = cleanText.replace(/export\s+default\s+/g, '');
+    const provider = LLMFactory.getProvider(model);
+    const response = await provider.generate(systemPrompt, prompt);
+    const cleanText = cleanJSX(response.text);
 
     res.json({ code: cleanText });
   } catch (error) {
