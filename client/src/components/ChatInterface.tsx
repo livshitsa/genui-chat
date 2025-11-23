@@ -11,7 +11,31 @@ interface Message {
     model?: 'gemini' | 'anthropic';
 }
 
+// Simple UUID v4 generator
+function generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+const STORAGE_KEY = 'chat_session_id';
+
 const ChatInterface: React.FC = () => {
+    // Initialize sessionId from localStorage or generate new one
+    const [sessionId, setSessionId] = useState<string>(() => {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            console.log('📂 Loaded session ID from localStorage:', stored);
+            return stored;
+        }
+        const newId = generateUUID();
+        localStorage.setItem(STORAGE_KEY, newId);
+        console.log('🆕 Created new session ID:', newId);
+        return newId;
+    });
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +69,22 @@ const ChatInterface: React.FC = () => {
         }
     };
 
+    const handleNewChat = () => {
+        // Generate new session ID
+        const newId = generateUUID();
+        setSessionId(newId);
+        localStorage.setItem(STORAGE_KEY, newId);
+        console.log('🆕 Started new chat with session ID:', newId);
+
+        // Clear local UI state
+        setMessages([]);
+        setActiveComponentCode(null);
+        setStreamingCode(null);
+        setInput('');
+        setIsChatExpanded(true);
+        setIsFlipped(false);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!input.trim()) return;
@@ -73,7 +113,7 @@ const ChatInterface: React.FC = () => {
             const response = await fetch('http://localhost:3000/api/generate-jsx', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: input, model: selectedModel }),
+                body: JSON.stringify({ prompt: input, model: selectedModel, sessionId }),
                 signal: controller.signal
             });
 
@@ -368,15 +408,28 @@ const ChatInterface: React.FC = () => {
                         onSubmit={handleSubmit}
                         className="relative bg-slate-900/60 backdrop-blur-2xl border border-slate-800/60 shadow-2xl rounded-[2rem] p-2 flex gap-2 ring-1 ring-white/5 transition-all duration-300 focus-within:ring-blue-500/50 focus-within:bg-slate-900/80 focus-within:border-slate-700 focus-within:shadow-blue-900/20 hover:border-slate-700"
                     >
-                        <div className="flex items-center pl-4">
+                        <div className="flex items-center gap-2 pl-4">
                             <select
                                 value={selectedModel}
                                 onChange={(e) => setSelectedModel(e.target.value as 'gemini' | 'anthropic')}
-                                className="bg-slate-800/50 text-slate-300 text-sm rounded-lg border border-slate-700 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none cursor-pointer hover:bg-slate-800 transition-colors"
+                                disabled={isLoading}
+                                className="bg-slate-800/50 text-slate-300 text-sm rounded-lg border border-slate-700 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none cursor-pointer hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <option value="gemini">Gemini</option>
                                 <option value="anthropic">Claude</option>
                             </select>
+                            <button
+                                type="button"
+                                onClick={handleNewChat}
+                                disabled={isLoading}
+                                className="bg-slate-800/50 text-slate-300 text-sm rounded-lg border border-slate-700 hover:bg-slate-800 hover:border-slate-600 transition-colors px-3 py-2.5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Start New Chat"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 5v14M5 12h14" />
+                                </svg>
+                                New Chat
+                            </button>
                         </div>
                         <input
                             type="text"

@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.1",
     "@google/generative-ai": "^0.24.1",
+    "@libsql/client": "^0.15.15",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0"
