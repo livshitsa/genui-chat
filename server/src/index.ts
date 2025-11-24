@@ -6,6 +6,7 @@ import { cleanJSX } from './utils/text-cleaner';
 import { initializeDatabase } from './db/database';
 import { ConversationService } from './services/conversation-service';
 import type { ConversationMessage } from './llm/llm-provider';
+import { BraveSearchTool } from './tools/brave-search';
 
 dotenv.config({ path: '../.env' });
 
@@ -33,9 +34,27 @@ app.post('/api/generate-jsx', async (req, res) => {
       return res.status(400).json({ error: 'Session ID is required' });
     }
 
+    // Get current date for context
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
     const systemPrompt = `
       You are a helpful AI assistant in a chat application.
       Your goal is to answer the user's question or request comprehensively and accurately.
+      
+      CURRENT DATE: ${currentDate}
+      Use this date as reference when the user asks for "latest", "current", "recent", or "today's" information.
+      
+      TOOL USAGE - CRITICAL:
+      You have access to tools including a web search tool (brave_web_search).
+      - When the user asks for current information, news, latest updates, or real-time data, YOU MUST USE THE SEARCH TOOL FIRST.
+      - DO NOT generate code that calls the search tool - YOU directly call the tool yourself before generating the UI.
+      - DO NOT include API calls or tool calls in the generated JSX component.
+      - Use the tool, get the results, then create a beautiful UI component that displays those results.
       
       CRITICAL INSTRUCTION:
       Instead of plain text, you MUST represent your entire response as a rich, interactive React component.
@@ -44,14 +63,12 @@ app.post('/api/generate-jsx', async (req, res) => {
       Examples:
       - User: "How do I make a cake?" -> Return a Recipe Card component with ingredients list, step-by-step instructions, and perhaps a "Start Baking" button (that could just be a visual element or link to a video).
       - User: "Explain quantum physics" -> Return an interactive "Concept Card" or "Educational Slide" with clear typography, perhaps an accordion for details, or a visual analogy.
-      - User: "Show me the latest news" -> Return a "News Feed" component with headlines, summaries, and "Read More" links.
+      - User: "Show me the latest news" -> USE THE SEARCH TOOL to get actual news, then return a "News Feed" component with real headlines, summaries, and "Read More" links.
       
       Functionality Rules:
       1. LINKS & BUTTONS: If you generate links (<a> tags) or buttons that imply navigation:
          - They MUST be functional.
          - External links MUST use \`target="_blank"\` and \`rel="noopener noreferrer"\` to open in a new tab.
-         - Do NOT generate dead buttons that do nothing.
-         - If a link is to a generic place, use a real, valid URL (e.g., a Google search link or a Wikipedia link) if possible, or a placeholder that clearly looks like a placeholder but is still clickable.
       
       Design Requirements:
       1. Use Tailwind CSS for sophisticated styling.
@@ -65,7 +82,7 @@ app.post('/api/generate-jsx', async (req, res) => {
          - Add interactivity (hover:scale-[1.02], active:scale-95, transition-all duration-300).
          - Use glassmorphism where appropriate (backdrop-blur-xl, bg-white/5 or bg-black/20).
       4. Use inline SVGs for icons. Do NOT use external icon libraries.
-      5. The component must be responsive (w-full, max-w-...).
+      5. The component must be responsive (w-full, max-w...).
       6. The content (the answer to the user) must be high-quality, helpful, and easy to read within the UI.
       
       Technical Rules:
@@ -76,6 +93,15 @@ app.post('/api/generate-jsx', async (req, res) => {
       5. Export default 'GeneratedComponent' at the end (e.g. "export default GeneratedComponent;").
       6. DO NOT use "export default function" or "export default () =>". Define the component first, then export it.
       7. Ensure all tags are properly closed and JSX is valid.
+      8. DO NOT include any tool calls or API calls in the JSX - all data should come from the tool results you already obtained.
+      
+      JSX SYNTAX VALIDATION - CRITICAL:
+      - Every opening tag MUST have a matching closing tag with the EXACT same name
+      - Check every <div>, <span>, <button>, <a>, etc. has its corresponding </div>, </span>, </button>, </a>
+      - Self-closing tags like <img />, <br />, <hr /> must end with />
+      - Tag names are case-sensitive in JSX - double-check all closing tags match their opening tags exactly
+      - Before finishing, mentally validate: count opening tags vs closing tags for each element type
+      - Common mistakes to avoid: </space> instead of </div>, missing closing tags, typos in tag names
     `;
 
     // Save user message to database
@@ -121,10 +147,11 @@ app.post('/api/generate-jsx', async (req, res) => {
     res.setHeader('Transfer-Encoding', 'chunked');
 
     const provider = LLMFactory.getProvider(model);
+    const searchTool = new BraveSearchTool();
 
     try {
       // Use the new history-aware stream method
-      const stream = provider.generateStreamWithHistory(systemPrompt, conversationMessages);
+      const stream = provider.generateStreamWithHistory(systemPrompt, conversationMessages, [searchTool]);
 
       let accumulatedCode = '';
 

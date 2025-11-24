@@ -44,6 +44,7 @@ const ChatInterface: React.FC = () => {
     const [isChatExpanded, setIsChatExpanded] = useState(true);
     const [isFlipped, setIsFlipped] = useState(false);
     const [selectedModel, setSelectedModel] = useState<'gemini' | 'anthropic'>('gemini');
+    const [activeTools, setActiveTools] = useState<string[]>([]);
     const rendererRef = useRef<DynamicRendererHandle>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -130,6 +131,7 @@ const ChatInterface: React.FC = () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let accumulatedCode = '';
+            let displayCode = '';
 
             setStreamingCode(''); // Start streaming
 
@@ -139,7 +141,27 @@ const ChatInterface: React.FC = () => {
 
                 const chunk = decoder.decode(value, { stream: true });
                 accumulatedCode += chunk;
-                setStreamingCode(accumulatedCode);
+
+                // Parse tool usage markers
+                const toolUseRegex = /__TOOL_USE__:([^\n]+)/g;
+                const toolEndRegex = /__TOOL_END__:([^\n]+)/g;
+
+                let match;
+                const currentTools = new Set<string>(activeTools);
+
+                while ((match = toolUseRegex.exec(accumulatedCode)) !== null) {
+                    currentTools.add(match[1]);
+                }
+
+                while ((match = toolEndRegex.exec(accumulatedCode)) !== null) {
+                    currentTools.delete(match[1]);
+                }
+
+                setActiveTools(Array.from(currentTools));
+
+                // Remove tool markers from display
+                displayCode = accumulatedCode.replace(/__TOOL_USE__:[^\n]+\n?/g, '').replace(/__TOOL_END__:[^\n]+\n?/g, '');
+                setStreamingCode(displayCode);
 
                 // Auto-scroll chat to bottom while streaming
                 if (chatContainerRef.current) {
@@ -148,7 +170,41 @@ const ChatInterface: React.FC = () => {
             }
 
             // Stream finished
-            const cleanCode = cleanJSX(accumulatedCode);
+            // Remove all content before the JSX code block
+            // Claude often adds explanatory text before the code, so we need to find where the actual JSX starts
+            let codeWithoutMarkers = accumulatedCode;
+
+            // First, remove tool execution content (from first __TOOL_USE__ to last __TOOL_END__)
+            const firstToolUse = codeWithoutMarkers.indexOf('__TOOL_USE__');
+            const lastToolEnd = codeWithoutMarkers.lastIndexOf('__TOOL_END__');
+
+            if (firstToolUse !== -1 && lastToolEnd !== -1 && lastToolEnd > firstToolUse) {
+                const endOfLastToolEnd = codeWithoutMarkers.indexOf('\n', lastToolEnd);
+                if (endOfLastToolEnd !== -1) {
+                    codeWithoutMarkers = codeWithoutMarkers.slice(0, firstToolUse) + codeWithoutMarkers.slice(endOfLastToolEnd + 1);
+                }
+            }
+
+            // Now find where the JSX actually starts (either with ```jsx or const/function)
+            // Look for the markdown code block first
+            const jsxBlockStart = codeWithoutMarkers.indexOf('```jsx');
+            const jsxBlockEnd = codeWithoutMarkers.lastIndexOf('```');
+
+            if (jsxBlockStart !== -1 && jsxBlockEnd > jsxBlockStart) {
+                // Extract JSX from between ```jsx and final ```
+                codeWithoutMarkers = codeWithoutMarkers.slice(jsxBlockStart + 6, jsxBlockEnd).trim();
+            } else {
+                // No markdown block, look for where the actual component definition starts
+                const componentStart = Math.max(
+                    codeWithoutMarkers.indexOf('const GeneratedComponent'),
+                    codeWithoutMarkers.indexOf('function GeneratedComponent')
+                );
+                if (componentStart > 0) {
+                    codeWithoutMarkers = codeWithoutMarkers.slice(componentStart);
+                }
+            }
+
+            const cleanCode = cleanJSX(codeWithoutMarkers);
 
             const aiMessage: Message = {
                 id: (Date.now() + 1).toString(),
@@ -161,6 +217,7 @@ const ChatInterface: React.FC = () => {
             setMessages(prev => [...prev, aiMessage]);
             setActiveComponentCode(cleanCode);
             setStreamingCode(null);
+            setActiveTools([]);
             setIsChatExpanded(false);
 
         } catch (error) {
@@ -344,6 +401,23 @@ const ChatInterface: React.FC = () => {
                                             Cancel
                                         </button>
                                     </div>
+
+                                    {/* Tool Usage Indicators */}
+                                    {activeTools.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {activeTools.map((toolName) => (
+                                                <div
+                                                    key={toolName}
+                                                    className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-medium animate-pulse"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                                                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                                    </svg>
+                                                    Using tool: {toolName}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
 
                                     {streamingCode !== null && (
                                         <div className="font-mono text-xs text-green-400 bg-black/50 p-4 rounded-xl overflow-x-auto max-h-64 whitespace-pre-wrap border border-slate-800/50 shadow-inner">
